@@ -3,7 +3,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 import io
-import json
 
 st.set_page_config(page_title="Toma de Inventario", layout="wide")
 
@@ -17,10 +16,15 @@ def conectar_google_sheets():
         "https://www.googleapis.com/auth/drive"
     ]
     
-    # Manejo de credenciales desde Streamlit Secrets usando JSON puro
-    if "textkey" in st.secrets:
-        # Carga el JSON directamente desde el string guardado
-        creds_dict = json.loads(st.secrets["textkey"])
+    # Lectura nativa directa desde Streamlit Secrets
+    if "gcp_service_account" in st.secrets:
+        # Convertir el objeto de secrets a diccionario
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        
+        # Corregir los saltos de línea de la clave privada si están escapados
+        if "private_key" in creds_dict:
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+            
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     else:
         # Fallback local
