@@ -4,9 +4,37 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 import io
 
-st.set_page_config(page_title="Toma de Inventario", layout="wide")
+# Configuración inicial y optimización de CSS para móviles
+st.set_page_config(
+    page_title="Toma de Inventario",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# Conexión a Google Sheets
+# CSS inyectado para reducir espacios y mejorar la experiencia en celulares
+st.markdown("""
+    <style>
+        /* Reducir el padding general en pantallas pequeñas */
+        .block-container {
+            padding-top: 1.5rem !important;
+            padding-bottom: 2rem !important;
+            padding-left: 0.8rem !important;
+            padding-right: 0.8rem !important;
+        }
+        /* Hacer botones e inputs más prominentes y táctiles */
+        .stButton>button {
+            width: 100%;
+            border-radius: 8px;
+            height: 3em;
+            font-weight: bold;
+        }
+        /* Ajustar métricas en móviles */
+        [data-testid="stMetricValue"] {
+            font-size: 1.5rem !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 SPREADSHEET_ID = "1WmytTvrx1_3C-a2UQln7grajwFvGNy0Mxl4y3MmPdZ0"
 
 @st.cache_resource
@@ -20,10 +48,8 @@ def conectar_google_sheets():
         st.error("No se encontraron las credenciales en 'Secrets' de Streamlit Cloud.")
         st.stop()
 
-    # Convertir el objeto de secretos a diccionario
     creds_dict = dict(st.secrets["gcp_service_account"])
 
-    # Reemplazar la representación textual de \n por el caracter de salto de línea real
     if "private_key" in creds_dict:
         creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
 
@@ -33,16 +59,14 @@ def conectar_google_sheets():
 
 sheet = conectar_google_sheets()
 
-st.title("📦 Toma de Inventario en Tiempo Real")
+st.title("📦 Toma de Inventario")
 
-# Obtener registros raw
 raw_data = sheet.get_all_values()
 
 if raw_data and len(raw_data) > 1:
     headers = [h.strip().upper() for h in raw_data[0]]
     df = pd.DataFrame(raw_data[1:], columns=headers)
 
-    # Identificar letras de columna (A1 Notation)
     def get_col_letter(col_name, default_letter):
         if col_name in headers:
             col_idx = headers.index(col_name)
@@ -53,7 +77,6 @@ if raw_data and len(raw_data) > 1:
     letra_dif = get_col_letter("DIFERENCIA", "E")
     letra_obs = get_col_letter("OBSERVACIONES", "F")
 
-    # Limpieza de tipos de datos
     df["CODIGO"] = df["CODIGO"].astype(str).str.strip().str.upper()
     df["ITEM"] = df["ITEM"].astype(str).str.strip().str.upper()
     
@@ -61,14 +84,12 @@ if raw_data and len(raw_data) > 1:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
 
-    # Panel lateral de búsqueda e ingreso
-    with st.sidebar:
-        st.header("🔍 Buscar y Registrar")
-        
+    # Registro rápido desplegable en la parte superior para fácil acceso en móvil
+    with st.expander("📝 **REGISTRAR O EDITAR CONTEO**", expanded=True):
         opciones_productos = df.apply(lambda row: f"{row['CODIGO']} - {row['ITEM']}", axis=1).tolist()
         
         producto_seleccionado = st.selectbox(
-            "Selecciona o busca un producto:",
+            "Buscar Producto:",
             options=opciones_productos,
             index=0
         )
@@ -83,19 +104,21 @@ if raw_data and len(raw_data) > 1:
             cant_inv_actual = int(df.loc[fila_index, "CANTIDAD INVENTARIADA"])
             obs_actual = str(df.loc[fila_index, "OBSERVACIONES"]) if "OBSERVACIONES" in df.columns else ""
             
-            st.markdown("---")
-            st.markdown(f"**Ítem:** {item_nombre}")
-            st.markdown(f"**Stock Sistema:** `{cant_sis}`")
-            st.markdown(f"**Conteo Acumulado Actual:** `{cant_inv_actual}`")
-            st.markdown("---")
+            # Resumen visual tipo métrica táctil
+            m1, m2 = st.columns(2)
+            m1.metric("Stock Sistema", cant_sis)
+            m2.metric("Conteo Actual", cant_inv_actual)
             
-            nueva_cantidad = st.number_input("Cantidad Encontrada en Físico", min_value=1, step=1, value=1)
-            observacion_input = st.text_input("Observaciones (opcional)", value="")
+            c1, c2 = st.columns([1, 1])
+            with c1:
+                nueva_cantidad = st.number_input("Cantidad", min_value=1, step=1, value=1)
+            with c2:
+                modo_registro = st.radio("Acción:", ["Sumar", "Reemplazar"], horizontal=True)
+                
+            observacion_input = st.text_input("Observación (opcional):", value="")
             
-            modo_registro = st.radio("Acción:", ["Sumar al conteo existente", "Reemplazar conteo total"])
-            
-            if st.button("Guardar Inventario", type="primary"):
-                if modo_registro == "Sumar al conteo existente":
+            if st.button("💾 Guardar Conteo", type="primary"):
+                if modo_registro == "Sumar":
                     total_inventariado = cant_inv_actual + int(nueva_cantidad)
                 else:
                     total_inventariado = int(nueva_cantidad)
@@ -107,50 +130,29 @@ if raw_data and len(raw_data) > 1:
                 sheet.update(range_name=f"{letra_dif}{num_fila_sheets}", values=[[int(diferencia_calculada)]])
                 sheet.update(range_name=f"{letra_obs}{num_fila_sheets}", values=[[str(obs_final)]])
                 
-                st.success(f"¡Actualizado {item_nombre}! Nuevo Total: {total_inventariado}")
+                st.success(f"¡Guardado! Nuevo total: {total_inventariado}")
                 st.cache_data.clear()
                 st.rerun()
 
-    # Pantalla principal
-    col_titulo, col_descarga = st.columns([3, 1])
+    st.markdown("---")
     
-    with col_titulo:
-        st.subheader("📊 Estado de Inventario")
+    # Sección de consulta y filtros
+    st.subheader("📊 Tabla de Control")
     
-    # Generar descarga en Excel (.xlsx) limpio
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Inventario')
-    
-    with col_descarga:
-        st.download_button(
-            label="📥 Descargar Excel",
-            data=buffer.getvalue(),
-            file_name="Inventario_Actualizado.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="secondary"
-        )
-
-    # Filtros de vista
-    col_filtro_estado, col_filtro_texto = st.columns([1, 2])
-    
-    with col_filtro_estado:
-        opcion_filtro = st.selectbox(
-            "Filtrar por Estado:",
-            options=["Mostrar Todos", "Solo con Diferencias (≠ 0)", "Sin Diferencias (= 0)", "Pendientes de Contar (Cant. Inv = 0)"]
-        )
+    opcion_filtro = st.selectbox(
+        "Filtrar lista:",
+        options=["Mostrar Todos", "Solo con Diferencias (≠ 0)", "Sin Diferencias (= 0)", "Pendientes (Cant. Inv = 0)"]
+    )
         
-    with col_filtro_texto:
-        busqueda_tabla = st.text_input("Filtrar por Código o Descripción:").strip().upper()
+    busqueda_tabla = st.text_input("Filtrar por texto:").strip().upper()
 
-    # Aplicar lógica de filtrado
     df_vista = df.copy()
 
     if opcion_filtro == "Solo con Diferencias (≠ 0)":
         df_vista = df_vista[df_vista["DIFERENCIA"] != 0]
     elif opcion_filtro == "Sin Diferencias (= 0)":
         df_vista = df_vista[df_vista["DIFERENCIA"] == 0]
-    elif opcion_filtro == "Pendientes de Contar (Cant. Inv = 0)":
+    elif opcion_filtro == "Pendientes (Cant. Inv = 0)":
         df_vista = df_vista[df_vista["CANTIDAD INVENTARIADA"] == 0]
 
     if busqueda_tabla:
@@ -159,8 +161,21 @@ if raw_data and len(raw_data) > 1:
             df_vista["ITEM"].str.contains(busqueda_tabla)
         ]
 
-    st.caption(f"Mostrando **{len(df_vista)}** de **{len(df)}** ítems totales.")
-    st.dataframe(df_vista, use_container_width=True)
+    st.caption(f"Mostrando **{len(df_vista)}** de **{len(df)}** ítems.")
+    st.dataframe(df_vista, use_container_width=True, hide_index=True)
+
+    # Descarga directa en Excel
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Inventario')
+    
+    st.download_button(
+        label="📥 Descargar Reporte en Excel",
+        data=buffer.getvalue(),
+        file_name="Inventario_Actualizado.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
 
 else:
     st.warning("No se encontraron registros en Google Sheets.")
