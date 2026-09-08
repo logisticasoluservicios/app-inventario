@@ -164,17 +164,22 @@ if raw_data and len(raw_data) > 1:
     st.caption(f"Mostrando **{len(df_vista)}** de **{len(df)}** ítems.")
     st.dataframe(df_vista, use_container_width=True, hide_index=True)
 
-    # Descarga directa en Excel
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Inventario')
-    
+    # Generar la descarga de Excel dinámicamente con los datos más recientes
+    def convertir_df_a_excel(dataframe):
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            dataframe.to_excel(writer, index=False, sheet_name='Inventario')
+        return output.getvalue()
+
+    excel_data = convertir_df_a_excel(df)
+
     st.download_button(
         label="📥 Descargar Reporte en Excel",
-        data=buffer.getvalue(),
+        data=excel_data,
         file_name="Inventario_Actualizado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True
+        use_container_width=True,
+        key="btn_descarga_excel"
     )
 
 else:
