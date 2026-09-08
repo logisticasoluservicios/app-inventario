@@ -18,13 +18,13 @@ def conectar_google_sheets():
         "https://www.googleapis.com/auth/drive"
     ]
     
+    # Priorizar la lectura de Secrets desde Streamlit Cloud en Base64
     if "creds_b64" in st.secrets:
-        # Modo Nube con Base64
         decoded_bytes = base64.b64decode(st.secrets["creds_b64"])
         creds_dict = json.loads(decoded_bytes.decode("utf-8"))
         creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     else:
-        # Modo local / archivo directo
+        # Solo busca el archivo físico si no hay secrets configurados
         creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
         
     client = gspread.authorize(creds)
