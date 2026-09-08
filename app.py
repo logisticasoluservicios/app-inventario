@@ -1,4 +1,3 @@
-
 import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
@@ -16,7 +15,15 @@ def conectar_google_sheets():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-    creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+    
+    # Intentar leer credenciales desde Streamlit Secrets (Nube)
+    if "gcp_service_account" in st.secrets:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    else:
+        # Modo local
+        creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+        
     client = gspread.authorize(creds)
     return client.open_by_key(SPREADSHEET_ID).sheet1
 
@@ -148,7 +155,6 @@ if raw_data and len(raw_data) > 1:
             df_vista["ITEM"].str.contains(busqueda_tabla)
         ]
 
-    # Mostrar métricas resumen arriba de la tabla
     st.caption(f"Mostrando **{len(df_vista)}** de **{len(df)}** ítems totales.")
     st.dataframe(df_vista, use_container_width=True)
 
