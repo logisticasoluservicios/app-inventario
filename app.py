@@ -3,8 +3,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 import io
-import base64
-import json
 
 st.set_page_config(page_title="Toma de Inventario", layout="wide")
 
@@ -18,13 +16,16 @@ def conectar_google_sheets():
         "https://www.googleapis.com/auth/drive"
     ]
     
-    if "creds_b64" in st.secrets:
-        decoded_bytes = base64.b64decode(st.secrets["creds_b64"])
-        creds_dict = json.loads(decoded_bytes.decode("utf-8"))
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-    else:
-        creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
-        
+    if "gcp_service_account" not in st.secrets:
+        st.error("No se encontraron las credenciales en 'Secrets' de Streamlit Cloud.")
+        st.stop()
+
+    creds_dict = dict(st.secrets["gcp_service_account"])
+
+    if "private_key" in creds_dict:
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+
+    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     client = gspread.authorize(creds)
     return client.open_by_key(SPREADSHEET_ID).sheet1
 
@@ -39,7 +40,6 @@ if raw_data and len(raw_data) > 1:
     headers = [h.strip().upper() for h in raw_data[0]]
     df = pd.DataFrame(raw_data[1:], columns=headers)
 
-    # Identificar letras de columna (A1 Notation)
     def get_col_letter(col_name, default_letter):
         if col_name in headers:
             col_idx = headers.index(col_name)
@@ -50,7 +50,6 @@ if raw_data and len(raw_data) > 1:
     letra_dif = get_col_letter("DIFERENCIA", "E")
     letra_obs = get_col_letter("OBSERVACIONES", "F")
 
-    # Limpieza de tipos de datos
     df["CODIGO"] = df["CODIGO"].astype(str).str.strip().str.upper()
     df["ITEM"] = df["ITEM"].astype(str).str.strip().str.upper()
     
@@ -58,7 +57,6 @@ if raw_data and len(raw_data) > 1:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
 
-    # Panel lateral de búsqueda e ingreso
     with st.sidebar:
         st.header("🔍 Buscar y Registrar")
         
@@ -108,13 +106,11 @@ if raw_data and len(raw_data) > 1:
                 st.cache_data.clear()
                 st.rerun()
 
-    # Pantalla principal
     col_titulo, col_descarga = st.columns([3, 1])
     
     with col_titulo:
         st.subheader("📊 Estado de Inventario")
     
-    # Generar descarga en Excel (.xlsx) limpio
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name='Inventario')
@@ -128,7 +124,6 @@ if raw_data and len(raw_data) > 1:
             type="secondary"
         )
 
-    # Filtros de vista
     col_filtro_estado, col_filtro_texto = st.columns([1, 2])
     
     with col_filtro_estado:
@@ -140,7 +135,6 @@ if raw_data and len(raw_data) > 1:
     with col_filtro_texto:
         busqueda_tabla = st.text_input("Filtrar por Código o Descripción:").strip().upper()
 
-    # Aplicar lógica de filtrado
     df_vista = df.copy()
 
     if opcion_filtro == "Solo con Diferencias (≠ 0)":
