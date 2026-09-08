@@ -1,6 +1,6 @@
 import streamlit as st
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 import pandas as pd
 import io
 
@@ -12,17 +12,19 @@ SPREADSHEET_ID = "1WmytTvrx1_3C-a2UQln7grajwFvGNy0Mxl4y3MmPdZ0"
 @st.cache_resource
 def conectar_google_sheets():
     scope = [
-        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
     
-    # Intentar leer credenciales desde Streamlit Secrets (Nube)
+    # Manejo de credenciales para Streamlit Cloud / Local
     if "gcp_service_account" in st.secrets:
         creds_dict = dict(st.secrets["gcp_service_account"])
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        # Corregir saltos de línea de la private key si vienen escapados
+        if "private_key" in creds_dict:
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
     else:
-        # Modo local
-        creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+        creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
         
     client = gspread.authorize(creds)
     return client.open_by_key(SPREADSHEET_ID).sheet1
