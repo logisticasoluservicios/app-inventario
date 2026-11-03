@@ -11,26 +11,20 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# CSS inyectado para reducir espacios y mejorar la experiencia en celulares
+# CSS inyectado para reducir espacios y mejorar la experiencia táctil
 st.markdown("""
     <style>
-        /* Reducir el padding general en pantallas pequeñas */
         .block-container {
             padding-top: 1.5rem !important;
             padding-bottom: 2rem !important;
             padding-left: 0.8rem !important;
             padding-right: 0.8rem !important;
         }
-        /* Hacer botones e inputs más prominentes y táctiles */
         .stButton>button {
             width: 100%;
             border-radius: 8px;
             height: 3em;
             font-weight: bold;
-        }
-        /* Ajustar métricas en móviles */
-        [data-testid="stMetricValue"] {
-            font-size: 1.5rem !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -84,7 +78,7 @@ if raw_data and len(raw_data) > 1:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
 
-    # Registro rápido desplegable en la parte superior para fácil acceso en móvil
+    # Registro rápido desplegable en la parte superior
     with st.expander("📝 **REGISTRAR O EDITAR CONTEO**", expanded=True):
         opciones_productos = df.apply(lambda row: f"{row['CODIGO']} - {row['ITEM']}", axis=1).tolist()
         
@@ -104,10 +98,12 @@ if raw_data and len(raw_data) > 1:
             cant_inv_actual = int(df.loc[fila_index, "CANTIDAD INVENTARIADA"])
             obs_actual = str(df.loc[fila_index, "OBSERVACIONES"]) if "OBSERVACIONES" in df.columns else ""
             
-            # Resumen visual tipo métrica táctil
+            # Tarjetas de resumen estables usando Markdown (sin errores de carga JS)
             m1, m2 = st.columns(2)
-            m1.metric("Stock Sistema", cant_sis)
-            m2.metric("Conteo Actual", cant_inv_actual)
+            with m1:
+                st.info(f"📋 **Stock Sistema:**\n\n### `{cant_sis}`")
+            with m2:
+                st.success(f"📦 **Conteo Actual:**\n\n### `{cant_inv_actual}`")
             
             c1, c2 = st.columns([1, 1])
             with c1:
@@ -164,7 +160,7 @@ if raw_data and len(raw_data) > 1:
     st.caption(f"Mostrando **{len(df_vista)}** de **{len(df)}** ítems.")
     st.dataframe(df_vista, use_container_width=True, hide_index=True)
 
-    # Generar la descarga de Excel dinámicamente con los datos más recientes
+    # Generar descarga de Excel dinámica
     def convertir_df_a_excel(dataframe):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
